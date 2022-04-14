@@ -1,0 +1,50 @@
+specVersion: 0.0.1
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: YodaLottery
+    network: mumbai
+    source:
+      address: "0x5e1DfB359734Be9068AaC2FfB02a0DAf7C3cFEB7"
+      abi: YodaLottery
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.5
+      language: wasm/assemblyscript
+      entities:
+        - AdminTokenRecovery
+        - LotteryClose
+        - LotteryInjection
+        - LotteryNumberDrawn
+        - LotteryOpen
+        - NewOperatorAndTreasuryAndInjectorAddresses
+        - NewRandomGenerator
+        - OwnershipTransferred
+        - TicketsClaim
+        - TicketsPurchase
+      abis:
+        - name: YodaLottery
+          file: ./abis/YodaLottery.json
+      eventHandlers:
+        - event: AdminTokenRecovery(address,uint256)
+          handler: handleAdminTokenRecovery
+        - event: LotteryClose(indexed uint256,uint256)
+          handler: handleLotteryClose
+        - event: LotteryInjection(indexed uint256,uint256)
+          handler: handleLotteryInjection
+        - event: LotteryNumberDrawn(indexed uint256,uint256,uint256)
+          handler: handleLotteryNumberDrawn
+        - event: LotteryOpen(indexed uint256,uint256,uint256,uint256,uint256,uint256)
+          handler: handleLotteryOpen
+        - event: NewOperatorAndTreasuryAndInjectorAddresses(address,address,address)
+          handler: handleNewOperatorAndTreasuryAndInjectorAddresses
+        - event: NewRandomGenerator(indexed address)
+          handler: handleNewRandomGenerator
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: TicketsClaim(indexed address,uint256,indexed uint256,uint256)
+          handler: handleTicketsClaim
+        - event: TicketsPurchase(indexed address,indexed uint256,uint256)
+          handler: handleTicketsPurchase
+      file: ./src/mapping.ts
