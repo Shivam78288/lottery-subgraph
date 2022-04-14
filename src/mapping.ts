@@ -1,98 +1,132 @@
-import { BigInt } from "@graphprotocol/graph-ts"
+/* eslint-disable prefer-const */
+import { BigDecimal, BigInt, Bytes, log } from "@graphprotocol/graph-ts";
+import { concat } from "@graphprotocol/graph-ts/helper-functions";
+import { Lottery, Round, User } from "../generated/schema";
 import {
-  YodaLottery,
-  AdminTokenRecovery,
   LotteryClose,
-  LotteryInjection,
   LotteryNumberDrawn,
   LotteryOpen,
-  NewOperatorAndTreasuryAndInjectorAddresses,
-  NewRandomGenerator,
-  OwnershipTransferred,
   TicketsClaim,
-  TicketsPurchase
-} from "../generated/YodaLottery/YodaLottery"
-import { ExampleEntity } from "../generated/schema"
+  TicketsPurchase,
+} from "../generated/YodaLottery/YodaLottery";
+import { toBigDecimal } from "./utils";
 
-export function handleAdminTokenRecovery(event: AdminTokenRecovery): void {
-  // Entities can be loaded from the store using a string ID; this ID
-  // needs to be unique across all entities of the same type
-  let entity = ExampleEntity.load(event.transaction.from.toHex())
+// BigNumber-like references
+let ZERO_BI = BigInt.fromI32(0);
+let ONE_BI = BigInt.fromI32(1);
+let ZERO_BD = BigDecimal.fromString("0");
+let HUNDRED_ONE_BI = BigInt.fromI32(101);
 
-  // Entities only exist after they have been saved to the store;
-  // `null` checks allow to create entities on demand
-  if (!entity) {
-    entity = new ExampleEntity(event.transaction.from.toHex())
-
-    // Entity fields can be set using simple assignments
-    entity.count = BigInt.fromI32(0)
-  }
-
-  // BigInt and BigDecimal math are supported
-  entity.count = entity.count + BigInt.fromI32(1)
-
-  // Entity fields can be set based on event parameters
-  entity.token = event.params.token
-  entity.amount = event.params.amount
-
-  // Entities can be written to the store with `.save()`
-  entity.save()
-
-  // Note: If a handler doesn't require existing field values, it is faster
-  // _not_ to load the entity from the store. Instead, create it fresh with
-  // `new Entity(...)`, set the fields that should be updated and save the
-  // entity back to the store. Fields that were not set or unset remain
-  // unchanged, allowing for partial updates to be applied.
-
-  // It is also possible to access smart contracts from mappings. For
-  // example, the contract that has emitted the event can be connected to
-  // with:
-  //
-  // let contract = Contract.bind(event.address)
-  //
-  // The following functions can then be called on this contract to access
-  // state variables and other data:
-  //
-  // - contract.MAX_LENGTH_LOTTERY(...)
-  // - contract.MAX_TREASURY_FEE(...)
-  // - contract.MIN_DISCOUNT_DIVISOR(...)
-  // - contract.MIN_LENGTH_LOTTERY(...)
-  // - contract.calculateTotalPriceForBulkTickets(...)
-  // - contract.currentLotteryId(...)
-  // - contract.currentTicketId(...)
-  // - contract.injectorAddress(...)
-  // - contract.maxNumberTicketsPerBuyOrClaim(...)
-  // - contract.maxPriceTicketInToken(...)
-  // - contract.minPriceTicketInToken(...)
-  // - contract.operatorAddress(...)
-  // - contract.owner(...)
-  // - contract.pendingInjectionNextLottery(...)
-  // - contract.randomGenerator(...)
-  // - contract.token(...)
-  // - contract.treasuryAddress(...)
-  // - contract.viewCurrentLotteryId(...)
-  // - contract.viewLottery(...)
-  // - contract.viewNumbersAndStatusesForTicketIds(...)
-  // - contract.viewRewardsForTicketId(...)
-  // - contract.viewUserInfoForLotteryId(...)
+export function handleLotteryOpen(event: LotteryOpen): void {
+  let lottery = new Lottery(event.params.lotteryId.toString());
+  lottery.totalUsers = ZERO_BI;
+  lottery.totalTickets = ZERO_BI;
+  lottery.status = "Open";
+  lottery.startTime = event.params.startTime;
+  lottery.endTime = event.params.endTime;
+  lottery.finalNumber = HUNDRED_ONE_BI;
+  lottery.ticketPrice = toBigDecimal(event.params.priceTicketInToken);
+  lottery.firstTicket = event.params.firstTicketId;
+  lottery.block = event.block.number;
+  lottery.timestamp = event.block.timestamp;
+  lottery.save();
 }
 
-export function handleLotteryClose(event: LotteryClose): void {}
+export function handleLotteryClose(event: LotteryClose): void {
+  let lottery = new Lottery(event.params.lotteryId.toString());
+  if (lottery !== null) {
+    lottery.status = "Close";
+    lottery.lastTicket = event.params.firstTicketIdNextLottery;
+    lottery.save();
+  }
+}
 
-export function handleLotteryInjection(event: LotteryInjection): void {}
+export function handleLotteryNumberDrawn(event: LotteryNumberDrawn): void {
+  let lottery = new Lottery(event.params.lotteryId.toString());
+  if (lottery !== null) {
+    lottery.status = "Claimable";
+    lottery.finalNumber = event.params.finalNumber;
+    lottery.winningTickets = event.params.countWinningTickets;
+    lottery.claimedTickets = ZERO_BI;
+    lottery.save();
+  }
+}
 
-export function handleLotteryNumberDrawn(event: LotteryNumberDrawn): void {}
+export function handleTicketsPurchase(event: TicketsPurchase): void {
+  let lottery = Lottery.load(event.params.lotteryId.toString());
+  if (lottery === null) {
+    log.warning("Trying to purchase tickets for an unknown lottery - #{}", [
+      event.params.lotteryId.toString(),
+    ]);
+  } else {
+    lottery.totalTickets = lottery.totalTickets.plus(
+      event.params.numberTickets
+    );
+    lottery.save();
 
-export function handleLotteryOpen(event: LotteryOpen): void {}
+    let user = User.load(event.params.buyer.toHex());
+    if (user === null) {
+      user = new User(event.params.buyer.toHex());
+      user.totalRounds = ZERO_BI;
+      user.totalTickets = ZERO_BI;
+      user.totalTokens = ZERO_BD;
+      user.block = event.block.number;
+      user.timestamp = event.block.timestamp;
+      user.save();
+    }
+    user.totalTickets = user.totalTickets.plus(event.params.numberTickets);
+    user.totalTokens = user.totalTokens.plus(
+      event.params.numberTickets.toBigDecimal().times(lottery.ticketPrice)
+    );
+    user.save();
 
-export function handleNewOperatorAndTreasuryAndInjectorAddresses(
-  event: NewOperatorAndTreasuryAndInjectorAddresses
-): void {}
+    let roundId = concat(
+      Bytes.fromHexString(event.params.buyer.toHex()),
+      Bytes.fromUTF8(event.params.lotteryId.toString())
+    ).toHex();
+    let round = Round.load(roundId);
+    if (round === null) {
+      round = new Round(roundId);
+      round.lottery = event.params.lotteryId.toString();
+      round.user = event.params.buyer.toHex();
+      round.totalTickets = ZERO_BI;
+      round.block = event.block.number;
+      round.timestamp = event.block.timestamp;
+      round.save();
 
-export function handleNewRandomGenerator(event: NewRandomGenerator): void {}
+      user.totalRounds = user.totalRounds.plus(ONE_BI);
+      user.save();
 
-export function handleOwnershipTransferred(event: OwnershipTransferred): void {}
+      lottery.totalUsers = lottery.totalUsers.plus(ONE_BI);
+      lottery.save();
+    }
+    round.totalTickets = round.totalTickets.plus(event.params.numberTickets);
+    round.save();
+  }
+}
 
-export function handleTicketsClaim(event: TicketsClaim): void {}
+export function handleTicketsClaim(event: TicketsClaim): void {
+  let lottery = Lottery.load(event.params.lotteryId.toString());
+  if (lottery !== null) {
+    lottery.claimedTickets = lottery.claimedTickets.plus(
+      event.params.numberTickets
+    );
+    lottery.save();
+  }
 
-export function handleTicketsPurchase(event: TicketsPurchase): void {}
+  let user = User.load(event.params.claimer.toHex());
+  if (user !== null) {
+    user.totalTokens = user.totalTokens.plus(toBigDecimal(event.params.amount));
+    user.save();
+  }
+
+  let roundId = concat(
+    Bytes.fromHexString(event.params.claimer.toHex()),
+    Bytes.fromUTF8(event.params.lotteryId.toString())
+  ).toHex();
+  let round = Round.load(roundId);
+  if (round !== null) {
+    round.claimed = true;
+    round.save();
+  }
+}

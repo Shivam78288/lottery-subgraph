@@ -1,6 +1,6 @@
 specVersion: 0.0.2
 schema:
-  file: ./schema.graphql
+  file: schema.graphql
 dataSources:
   - kind: ethereum
     name: YodaLottery
@@ -21,7 +21,7 @@ dataSources:
         - TicketsPurchase
       abis:
         - name: YodaLottery
-          file: ./abis/YodaLottery.json
+          file: YodaLottery\abis\YodaLottery.json
       eventHandlers:
         - event: LotteryClose(indexed uint256,uint256)
           handler: handleLotteryClose
@@ -33,4 +33,4 @@ dataSources:
           handler: handleTicketsClaim
         - event: TicketsPurchase(indexed address,indexed uint256,uint256)
           handler: handleTicketsPurchase
-      file: ./src/mapping.ts
+      file: YodaLottery\YodaLottery.wasm
